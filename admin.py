@@ -1,12 +1,12 @@
 from django.contrib import admin
 from .models import (
     Course,
-    Module,
     Lesson,
+    Instructor,
+    Learner,
     Question,
     Choice,
-    Quiz,
-    Category,
+    Submission,
 )
 
 
