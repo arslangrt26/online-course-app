@@ -1,59 +1,53 @@
-# views.py
-
-from django.shortcuts import render, redirect, get_object_or_404
-from django.http import HttpResponse
-from django.contrib.auth.decorators import login_required
-
-from .models import Exam, Question, Result
-
-
 @login_required
 def submit(request, exam_id):
-    """
-    Handles exam submission.
-    Calculates score and saves result.
-    """
     exam = get_object_or_404(Exam, id=exam_id)
+
+    # assuming Exam is linked to Course
+    course = exam.course
+
+    # enrollment check (adjust field names if needed)
+    enrollment = get_object_or_404(
+        Enrollment,
+        user=request.user,
+        course=course
+    )
+
     questions = Question.objects.filter(exam=exam)
 
     if request.method == "POST":
-        score = 0
-        total = questions.count()
-
-        for question in questions:
-            selected_answer = request.POST.get(str(question.id))
-
-            # assuming correct_answer is stored in question.correct_option
-            if selected_answer == question.correct_option:
-                score += 1
-
-        result = Result.objects.create(
+        submission = Submission.objects.create(
             user=request.user,
             exam=exam,
-            score=score,
-            total=total
+            enrollment=enrollment
         )
 
-        return redirect("show_exam_result", result_id=result.id)
+        total_score = 0
+        possible_score = 0
+
+        for question in questions:
+            choice_id = request.POST.get(str(question.id))
+
+            if not choice_id:
+                continue
+
+            choice = get_object_or_404(Choice, id=choice_id)
+
+            # link selected choice to submission
+            submission.choices.add(choice)
+
+            # scoring using required method
+            if question.is_get_score(choice):
+                total_score += question.score
+
+            possible_score += question.score
+
+        submission.total_score = total_score
+        submission.possible_score = possible_score
+        submission.save()
+
+        return redirect("show_exam_result", result_id=submission.id)
 
     return render(request, "exam/submit.html", {
         "exam": exam,
         "questions": questions
-    })
-
-
-@login_required
-def show_exam_result(request, result_id):
-    """
-    Displays the exam result to the user.
-    """
-    result = get_object_or_404(Result, id=result_id, user=request.user)
-
-    percentage = 0
-    if result.total > 0:
-        percentage = (result.score / result.total) * 100
-
-    return render(request, "exam/result.html", {
-        "result": result,
-        "percentage": percentage
     })
